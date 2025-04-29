@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+import os
+import shutil
+import pyperclip
+from datetime import datetime
+import mimetypes
+
+def is_text_file(file_path):
+    """Check if a file is likely a text file based on its extension or MIME type."""
+    text_extensions = {'.txt', '.md', '.py', '.toml', '.zsh', '.sh', '.conf', '.cfg', '.ini', '.json', '.yaml', '.yml'}
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext in text_extensions:
+        return True
+    mime_type, _ = mimetypes.guess_type(file_path)
+    return mime_type and mime_type.startswith('text')
+
+def process_folder(folder_path, output_dir, context_lines):
+    """Process a single folder: copy text files and collect their contents."""
+    folder_name = os.path.basename(folder_path)
+    dest_folder = os.path.join(output_dir, folder_name)
+    
+    # Create destination folder if it doesn't exist
+    os.makedirs(dest_folder, exist_ok=True)
+    
+    context_lines.append(f"\n# {folder_name}\n")
+    
+    # Iterate through files in the folder
+    for item in os.listdir(folder_path):
+        item_path = os.path.join(folder_path, item)
+        dest_path = os.path.join(dest_folder, item)
+        
+        # Skip if it's a directory
+        if os.path.isdir(item_path):
+            continue
+            
+        # Process only text files
+        if is_text_file(item_path):
+            # Copy file to destination
+            shutil.copy2(item_path, dest_path)
+            
+            # Append contents to context
+            try:
+                with open(item_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    context_lines.append(f"\n## File: {item}\n")
+                    context_lines.append("```\n")
+                    context_lines.append(content)
+                    context_lines.append("\n```\n")
+            except Exception as e:
+                context_lines.append(f"\n## File: {item}\n[Error reading file: {str(e)}]\n")
+
+def generate_context(output_base_dir):
+    """Main function to process all folders in current directory and generate context."""
+    # Create output directory with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = os.path.join(output_base_dir, f"context_{timestamp}")
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Collect context lines
+    context_lines = [f"# Context Summary Generated on {timestamp}\n"]
+    
+    # Get all folders and files in current directory
+    for item in os.listdir('.'):
+        item_path = os.path.join('.', item)
+        
+        if os.path.isdir(item_path):
+            process_folder(item_path, output_dir, context_lines)
+        elif os.path.isfile(item_path) and is_text_file(item_path):
+            # Handle single text files in the root directory
+            folder_name = "single_files"
+            dest_folder = os.path.join(output_dir, folder_name)
+            os.makedirs(dest_folder, exist_ok=True)
+            shutil.copy2(item_path, os.path.join(dest_folder, item))
+            
+            context_lines.append(f"\n# Single Files\n")
+            try:
+                with open(item_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    context_lines.append(f"\n## File: {item}\n")
+                    context_lines.append("```\n")
+                    context_lines.append(content)
+                    context_lines.append("\n```\n")
+            except Exception as e:
+                context_lines.append(f"\n## File: {item}\n[Error reading file: {str(e)}]\n")
+    
+    # Write to context file
+    context_file = os.path.join(output_dir, "context_summary.txt")
+    context_content = "".join(context_lines)
+    with open(context_file, 'w', encoding='utf-8') as f:
+        f.write(context_content)
+    
+    # Copy to clipboard
+    pyperclip.copy(context_content)
+    
+    return output_dir, context_file
+
+if __name__ == "__main__":
+    # Output base directory
+    output_base = "./context_output"
+    
+    # Run the script
+    output_dir, context_file = generate_context(output_base)
+    print(f"Context generated in: {output_dir}")
+    print(f"Summary file: {context_file}")
+    print("Context content has been copied to your clipboard!")

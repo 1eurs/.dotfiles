@@ -1,17 +1,16 @@
-eval "$(starship init zsh)"
-export PATH="/opt/homebrew/bin:$PATH"
-export PATH="$HOME/.cargo/bin:$PATH"
-export PATH="/opt/homebrew/opt/openjdk@21/bin:$PATH"
+
+# Environment variables for all Zsh sessions
+export PATH="/opt/homebrew/bin:$HOME/.cargo/bin:/opt/homebrew/opt/openjdk@21/bin:/opt/homebrew/opt/node@22/bin:$HOME/.config/scripts:$PATH"
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21
-export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
-export PATH="$HOME/.config/scripts:$PATH"
+
+
+eval "$(starship init zsh)"
 source $(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 source $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 
 
 alias ll='eza  --header --group --git --long'
 alias ll.tree='eza --header --group --tree --level=2  --git --long --icons'
-
 alias ls='eza --header --group --long --all'
 alias ls.tree='eza --header --group --tree --level=2  --git --long --icons --all'
 

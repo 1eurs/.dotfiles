@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+import json
+import os
+import random
+import shutil
+import time
+import re
+import glob
+import math
+
+# Configuration
+ART_DIR = "/Users/m7m2od/.config/scripts/ascii"
+QUOTE_FILE = f"{ART_DIR}/quotes.json"
+ART_FILES = glob.glob(os.path.join(ART_DIR, "logo*"))
+
+RESET = "\033[0m"
+TERM_WIDTH = shutil.get_terminal_size().columns
+QUOTE_WIDTH = min(max(TERM_WIDTH * 3 // 4, 20), 50)
+MAX_ART_WIDTH = min(TERM_WIDTH, 80)
+MAX_ART_HEIGHT = 20
+
+
+def generate_bright_colors(num_colors=50):
+    """
+    Generate a list of random bright ANSI color codes with RGB values.
+    Returns list of tuples: (color_code, (r, g, b))
+    """
+    colors = []
+    for _ in range(num_colors):
+        r = (
+            random.randint(100, 255)
+            if random.choice([True, False])
+            else random.randint(0, 150)
+        )
+        g = (
+            random.randint(100, 255)
+            if random.choice([True, False])
+            else random.randint(0, 150)
+        )
+        b = (
+            random.randint(100, 255)
+            if random.choice([True, False])
+            else random.randint(0, 150)
+        )
+        if max(r, g, b) < 200:
+            brightest = random.choice(["r", "g", "b"])
+            if brightest == "r":
+                r = random.randint(200, 255)
+            elif brightest == "g":
+                g = random.randint(200, 255)
+            else:
+                b = random.randint(200, 255)
+        color_code = f"\033[38;2;{r};{g};{b}m"
+        colors.append((color_code, (r, g, b)))
+    return colors
+
+
+COLORS = generate_bright_colors(50)
+
+
+def pick_unique_color(used_colors):
+    available_colors = [c for c, _ in COLORS if c not in used_colors]
+    return (
+        random.choice(available_colors)
+        if available_colors
+        else random.choice([c for c, _ in COLORS])
+    )
+
+
+def wrap_text(text, width):
+    lines = []
+    for line in text.splitlines():
+        while len(line) > width:
+            split_pos = line[:width].rfind(" ")
+            if split_pos == -1:
+                split_pos = width
+            lines.append(line[:split_pos].rstrip())
+            line = line[split_pos:].lstrip()
+        if line:
+            lines.append(line)
+    return lines
+
+
+def strip_ansi(text):
+    """Remove ANSI color codes for accurate width calculation."""
+    return re.sub(r"\033\[[0-9;]*m", "", text)
+
+
+def center_text(text, term_width=TERM_WIDTH):
+    lines = text.splitlines()
+    max_width = max(len(strip_ansi(line)) for line in lines if line)
+    return "\n".join(
+        " " * ((term_width - len(strip_ansi(line))) // 2) + line
+        for line in lines
+        if line
+    )
+
+
+def scale_ascii_art(art, max_width, max_height):
+    """
+    Scale down ASCII art to fit within max_width and max_height.
+    """
+    lines = art.splitlines()
+    if not lines:
+        return art
+
+    height = len(lines)
+    width = max(len(line) for line in lines)
+
+    if width <= max_width and height <= max_height:
+        return art
+
+    width_ratio = max_width / width if width > max_width else 1
+    height_ratio = max_height / height if height > max_height else 1
+    scale = min(width_ratio, height_ratio)
+
+    if scale < 0.1:
+        return ""
+
+    new_lines = []
+    for i in range(0, height, int(1 / scale)):
+        if i >= height:
+            break
+        line = lines[i]
+        new_line = "".join(line[j] for j in range(0, len(line), int(1 / scale)))
+        new_lines.append(new_line)
+
+    return "\n".join(new_lines[:max_height])
+
+
+# New: Function to apply glow effect
+def apply_glow_effect(art):
+    """
+    Apply a glowing effect by assigning brighter colors to the center of the ASCII art
+    and fading to darker colors toward the edges.
+    """
+    lines = art.splitlines()
+    if not lines:
+        return art
+
+    height = len(lines)
+    width = max(len(line) for line in lines)
+    center_x, center_y = width / 2, height / 2
+    max_distance = math.sqrt(center_x**2 + center_y**2) or 1
+
+    output = []
+    for y, line in enumerate(lines):
+        colored_line = ""
+        for x, char in enumerate(line):
+            if char.isspace():
+                colored_line += char
+                continue
+            # Calculate distance from center
+            distance = math.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
+            # Normalize distance to [0, 1]
+            norm_distance = distance / max_distance
+            # Brightness decreases with distance (1 at center, 0.5 at edges)
+            brightness = 1 - (norm_distance * 0.5)
+            # Select a color and adjust its brightness
+            base_color, (r, g, b) = random.choice(COLORS)
+            new_r = int(r * brightness)
+            new_g = int(g * brightness)
+            new_b = int(b * brightness)
+            color_code = f"\033[38;2;{new_r};{new_g};{new_b}m"
+            colored_line += f"{color_code}{char}{RESET}"
+        output.append(colored_line)
+    return "\n".join(output)
+
+
+def display_quote(quote, base_color):
+    wrapped_quote = wrap_text(quote, QUOTE_WIDTH)
+    max_width = max(len(line) for line in wrapped_quote)
+    border = "═" * max_width
+    output = []
+
+    output.append(f"{base_color}╔═{border}═╗{RESET}")
+    for i, line in enumerate(wrapped_quote):
+        line_color = [c for c, _ in COLORS][i % len(COLORS)]
+        padded_line = line + " " * (max_width - len(line))
+        output.append(
+            f"{base_color}║{RESET} {line_color}“{padded_line}”{RESET} {base_color}║{RESET}"
+        )
+    output.append(f"{base_color}╚═{border}═╝{RESET}")
+
+    print(center_text("\n".join(output)))
+
+
+def main():
+    # Load quotes
+    if not os.path.exists(QUOTE_FILE):
+        print(f"Error: {QUOTE_FILE} not found.")
+        return 1
+    with open(QUOTE_FILE) as f:
+        quotes = json.load(f).get("quotes", [])
+    if not quotes:
+        print(f"Error: No quotes found in {QUOTE_FILE}.")
+        return 1
+    quote = random.choice(quotes)
+
+    # Load ASCII art
+    valid_art_files = [
+        f for f in ART_FILES if os.path.exists(f) and os.path.getsize(f) > 0
+    ]
+    if not valid_art_files:
+        print("Error: No valid ASCII art files found.")
+        return 1
+    art_file = random.choice(valid_art_files)
+    with open(art_file) as f:
+        art_content = f.read().rstrip()
+
+    # Scale down the ASCII art
+    art_content = scale_ascii_art(art_content, MAX_ART_WIDTH, MAX_ART_HEIGHT)
+    if not art_content:
+        print("Error: ASCII art too large to scale down effectively.")
+        return 1
+
+    # Apply glow effect instead of single color
+    art_content = apply_glow_effect(art_content)
+
+    # Display output
+    if random.random() < 0.5:
+        art_content = f"\n{art_content}\n"
+    print(f"{center_text(art_content)}\n")
+
+    # Pick colors for quote and welcome
+    quote_color = pick_unique_color([])
+    welcome_color = pick_unique_color([quote_color])
+
+    display_quote(quote, quote_color)
+
+    # Welcome message with random tagline
+    taglines = [
+        "Unleash your code-fu!",
+        "Hack the planet!",
+        "Keep it 100!",
+        "Code like a boss!",
+        "Stay lit, keep coding!",
+    ]
+    welcome_message = (
+        f"Yo, {os.getlogin()}! {random.choice(taglines)} @ {time.strftime('%H:%M')}"
+    )
+    colored_welcome = ""
+    for i, char in enumerate(welcome_message):
+        colored_welcome += f"{[c for c, _ in COLORS][i % len(COLORS)]}{char}{RESET}"
+    print(f"\n{center_text(colored_welcome)}")
+
+
+if __name__ == "__main__":
+    exit(main())
